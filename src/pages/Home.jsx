@@ -16,10 +16,32 @@ import BusinessCategories from "../components/shared/BusinessCategories";
 import { useAuthStore } from "../store/auth";
 
 const HERO_ROTATE_MS = 5000;
+const MOBILE_AD_ROTATE_MS = 4000;
 const PRODUCT_CHUNK = 12;
+const MOBILE_AD_EVERY = 5;
+
+/* ═══════════════════════════════════════════════════════
+   Hook: isMobile (matches Tailwind's lg breakpoint = 1024px)
+   ═══════════════════════════════════════════════════════ */
+function useIsMobile(breakpoint = 1024) {
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== "undefined" ? window.innerWidth < breakpoint : false
+  );
+
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${breakpoint - 1}px)`);
+    const handler = (e) => setIsMobile(e.matches);
+    setIsMobile(mq.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, [breakpoint]);
+
+  return isMobile;
+}
 
 export default function Home() {
   const { user, setUser } = useAuthStore();
+  const isMobile = useIsMobile();
 
   const [ads, setAds] = useState([]);
   const [bizCats, setBizCats] = useState([]);
@@ -99,7 +121,10 @@ export default function Home() {
   return (
     <div className="space-y-10 pb-10">
       {/* ═══════════════════════════════════════════════════════
-          TOP: Category sidebar (LEFT) + Ads (RIGHT)
+          TOP SECTION
+          - Desktop: sidebar + ads grid (unchanged)
+          - Mobile: products first → ads carousel → products with
+            inline ad every 5 products
       ═══════════════════════════════════════════════════════ */}
       <section className="container-app pt-6">
         <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
@@ -170,17 +195,17 @@ export default function Home() {
             </div>
           </aside>
 
-          {/* ── RIGHT: Ads (hero + 2 mini) ── */}
-          <div className="min-w-0">
+          {/* ── RIGHT: Ads (hero + 2 mini) — desktop only ── */}
+          <div className="hidden min-w-0 lg:block">
             {topAds.length > 0 ? (
               <AdSection ads={topAds} />
             ) : (
               <div className="h-48 rounded-2xl bg-gradient-to-br from-brand-600 to-navy-600 sm:h-72" />
             )}
 
-            {/* Mobile category strip — only shows on small screens */}
+            {/* Mobile category strip — hidden now that we render mobile below */}
             {categories.length > 0 && (
-              <div className="scrollbar-none mt-3 flex gap-2 overflow-x-auto pb-1 lg:hidden">
+              <div className="scrollbar-none mt-3 hidden gap-2 overflow-x-auto pb-1">
                 <button
                   onClick={() => setSelectedCat(null)}
                   className={
@@ -213,6 +238,40 @@ export default function Home() {
             )}
           </div>
         </div>
+
+        {/* ═══ MOBILE: category strip ═══ */}
+        {categories.length > 0 && (
+          <div className="scrollbar-none mt-1 flex gap-2 overflow-x-auto pb-1 lg:hidden">
+            <button
+              onClick={() => setSelectedCat(null)}
+              className={
+                "shrink-0 rounded-full px-3.5 py-1.5 text-[12px] font-bold transition-colors " +
+                (selectedCat === null
+                  ? "bg-brand-600 text-white"
+                  : "bg-white text-ink-600 border border-ink-200 dark:bg-ink-900 dark:border-ink-800 dark:text-ink-300")
+              }
+            >
+              All
+            </button>
+            {categories.slice(0, 10).map((c) => {
+              const isActive = selectedCat === c.id;
+              return (
+                <button
+                  key={c.id}
+                  onClick={() => setSelectedCat(isActive ? null : c.id)}
+                  className={
+                    "shrink-0 rounded-full px-3.5 py-1.5 text-[12px] font-bold transition-colors " +
+                    (isActive
+                      ? "bg-brand-600 text-white"
+                      : "bg-white text-ink-600 border border-ink-200 dark:bg-ink-900 dark:border-ink-800 dark:text-ink-300")
+                  }
+                >
+                  {c.name}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       {/* ═══ BUSINESS CATEGORIES (icons row) ═══ */}
@@ -239,68 +298,140 @@ export default function Home() {
         </section>
       )}
 
-      {/* ═══ PRODUCTS — first 12 ═══ */}
-      <section className="container-app">
-        <SectionHeader
-          icon={<Flame size={16} className="text-brand-600" />}
-          title={
-            selectedCat
-              ? categories.find((c) => c.id === selectedCat)?.name ||
-                "Recommended for you"
-              : "Recommended for you"
-          }
-          subtitle={
-            user
-              ? `Fresh picks for ${user.full_name?.split(" ")[0] || "you"}`
-              : "Fresh picks from your favourite traders"
-          }
-          to="/search"
-        />
+      {/* ═══════════════════════════════════════════════════════
+          PRODUCTS + ADS
+          Desktop: first 12 → mid ads grid → rest
+          Mobile:  products first (with inline ad every 5) →
+                   single auto-scroll ad carousel → rest
+      ═══════════════════════════════════════════════════════ */}
 
-        {loading ? (
-          <ProductSkeletonGrid count={10} />
-        ) : productsBeforeAds.length === 0 ? (
-          <p className="py-16 text-center text-sm text-ink-400">
-            No products yet.
-          </p>
-        ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-            {productsBeforeAds.map((p) => (
-              <ProductCard key={p.id} product={p} />
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* ═══ MID ADS ═══ */}
-      {midAds.length > 0 && (
-        <section className="container-app">
-          <div className="mb-3 flex items-center gap-2">
-            <Megaphone size={16} className="text-brand-600" />
-            <h2 className="text-[17px] font-black tracking-tight">
-              Sponsored picks
-            </h2>
-          </div>
-          <AdSection ads={midAds} />
-        </section>
-      )}
-
-      {/* ═══ PRODUCTS — after ═══ */}
-      {productsAfterAds.length > 0 && (
+      {/* ── DESKTOP product flow (hidden on mobile) ── */}
+      <div className="hidden space-y-10 lg:block">
+        {/* First 12 products */}
         <section className="container-app">
           <SectionHeader
-            icon={<ShoppingBag size={16} className="text-brand-600" />}
-            title="More products"
-            subtitle="Keep exploring"
+            icon={<Flame size={16} className="text-brand-600" />}
+            title={
+              selectedCat
+                ? categories.find((c) => c.id === selectedCat)?.name ||
+                  "Recommended for you"
+                : "Recommended for you"
+            }
+            subtitle={
+              user
+                ? `Fresh picks for ${user.full_name?.split(" ")[0] || "you"}`
+                : "Fresh picks from your favourite traders"
+            }
             to="/search"
           />
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-            {productsAfterAds.map((p) => (
-              <ProductCard key={p.id} product={p} />
-            ))}
-          </div>
+
+          {loading ? (
+            <ProductSkeletonGrid count={10} />
+          ) : productsBeforeAds.length === 0 ? (
+            <p className="py-16 text-center text-sm text-ink-400">
+              No products yet.
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+              {productsBeforeAds.map((p) => (
+                <ProductCard key={p.id} product={p} />
+              ))}
+            </div>
+          )}
         </section>
-      )}
+
+        {/* Mid ads grid */}
+        {midAds.length > 0 && (
+          <section className="container-app">
+            <div className="mb-3 flex items-center gap-2">
+              <Megaphone size={16} className="text-brand-600" />
+              <h2 className="text-[17px] font-black tracking-tight">
+                Sponsored picks
+              </h2>
+            </div>
+            <AdSection ads={midAds} />
+          </section>
+        )}
+
+        {/* Products after */}
+        {productsAfterAds.length > 0 && (
+          <section className="container-app">
+            <SectionHeader
+              icon={<ShoppingBag size={16} className="text-brand-600" />}
+              title="More products"
+              subtitle="Keep exploring"
+              to="/search"
+            />
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+              {productsAfterAds.map((p) => (
+                <ProductCard key={p.id} product={p} />
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
+
+      {/* ── MOBILE product flow (hidden on desktop) ── */}
+      <div className="space-y-10 lg:hidden">
+        {/* Products first — inline ad every MOBILE_AD_EVERY products */}
+        <section className="container-app">
+          <SectionHeader
+            icon={<Flame size={16} className="text-brand-600" />}
+            title={
+              selectedCat
+                ? categories.find((c) => c.id === selectedCat)?.name ||
+                  "Recommended for you"
+                : "Recommended for you"
+            }
+            subtitle={
+              user
+                ? `Fresh picks for ${user.full_name?.split(" ")[0] || "you"}`
+                : "Fresh picks from your favourite traders"
+            }
+            to="/search"
+          />
+
+          {loading ? (
+            <ProductSkeletonGrid count={10} />
+          ) : productsBeforeAds.length === 0 ? (
+            <p className="py-16 text-center text-sm text-ink-400">
+              No products yet.
+            </p>
+          ) : (
+            <>
+              <MobileProductGrid
+                products={productsBeforeAds}
+                ads={ads}
+                startIndex={0}
+              />
+
+              {/* Single auto-scrolling ad carousel */}
+              {ads.length > 0 && (
+                <div className="mt-6">
+                  <div className="mb-2 flex items-center gap-2">
+                    <Megaphone size={15} className="text-brand-600" />
+                    <h2 className="text-[15px] font-black tracking-tight">
+                      Sponsored
+                    </h2>
+                  </div>
+                  <MobileAdCarousel ads={ads} />
+                </div>
+              )}
+
+              {/* Remaining products with inline ads */}
+              {productsAfterAds.length > 0 && (
+                <div className="mt-6">
+                  <MobileProductGrid
+                    products={productsAfterAds}
+                    ads={ads}
+                    startIndex={productsBeforeAds.length}
+                  />
+                </div>
+              )}
+            </>
+          )}
+        </section>
+      </div>
 
       {/* ═══ MARKETS ═══ */}
       {markets.length > 0 && (
@@ -325,7 +456,194 @@ export default function Home() {
 }
 
 /* ═══════════════════════════════════════════════════════
-   AdSection — hero (rotating) + 2 mini
+   MOBILE: product grid with inline ads after every N items
+   ═══════════════════════════════════════════════════════ */
+function MobileProductGrid({ products, ads, startIndex = 0 }) {
+  if (!products.length) return null;
+
+  const items = [];
+  products.forEach((p, i) => {
+    items.push(
+      <ProductCard key={`p-${p.id}`} product={p} />
+    );
+
+    const isLast = i === products.length - 1;
+    const shouldInsertAd =
+      !isLast &&
+      (startIndex + i + 1) % MOBILE_AD_EVERY === 0 &&
+      ads.length > 0;
+
+    if (shouldInsertAd) {
+      const ad = ads[(startIndex + i) % ads.length];
+      items.push(
+        <div key={`ad-${startIndex + i}`} className="col-span-2">
+          <MobileInlineAd ad={ad} />
+        </div>
+      );
+    }
+  });
+
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      {items}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   MOBILE: single auto-scrolling ad carousel
+   ═══════════════════════════════════════════════════════ */
+function MobileAdCarousel({ ads }) {
+  const list = useMemo(() => ads.slice(0, 8), [ads]);
+  const [idx, setIdx] = useState(0);
+  const timerRef = useRef(null);
+  const touchStartX = useRef(0);
+
+  useEffect(() => {
+    if (list.length < 2) return;
+    timerRef.current = setInterval(() => {
+      setIdx((i) => (i + 1) % list.length);
+    }, MOBILE_AD_ROTATE_MS);
+    return () => clearInterval(timerRef.current);
+  }, [list.length]);
+
+  if (!list.length) return null;
+
+  const go = (dir) => {
+    setIdx((i) => (i + dir + list.length) % list.length);
+  };
+
+  const handleTouchStart = (e) => {
+    touchStartX.current = e.touches[0].clientX;
+    if (timerRef.current) clearInterval(timerRef.current);
+  };
+
+  const handleTouchEnd = (e) => {
+    const dx = e.changedTouches[0].clientX - touchStartX.current;
+    if (Math.abs(dx) > 40) go(dx < 0 ? 1 : -1);
+    if (list.length > 1) {
+      timerRef.current = setInterval(() => {
+        setIdx((i) => (i + 1) % list.length);
+      }, MOBILE_AD_ROTATE_MS);
+    }
+  };
+
+  return (
+    <div
+      className="relative overflow-hidden rounded-2xl"
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
+      <div
+        className="flex transition-transform duration-500 ease-out"
+        style={{ transform: `translateX(-${idx * 100}%)` }}
+      >
+        {list.map((ad) => (
+          <div key={ad.id} className="w-full shrink-0">
+            <MobileHeroAd ad={ad} />
+          </div>
+        ))}
+      </div>
+
+      {/* Dots */}
+      {list.length > 1 && (
+        <div className="absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 gap-1.5">
+          {list.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => setIdx(i)}
+              aria-label={`Go to ad ${i + 1}`}
+              className={
+                "h-1.5 rounded-full transition-all " +
+                (i === idx ? "w-5 bg-white" : "w-1.5 bg-white/60")
+              }
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MobileHeroAd({ ad }) {
+  const img = getFullImageUrl(ad.image_url);
+  return (
+    <a
+      href={ad.link_url || "#"}
+      target="_blank"
+      rel="noreferrer"
+      className="group relative block h-[200px] w-full overflow-hidden rounded-2xl bg-ink-900 text-white shadow-lg"
+    >
+      <div className="absolute inset-0">
+        {img ? (
+          <img
+            src={img}
+            alt={ad.title}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <div className="h-full w-full bg-gradient-to-br from-brand-600 to-navy-600" />
+        )}
+      </div>
+      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent" />
+      <div className="relative z-10 flex h-full flex-col justify-end p-4">
+        <span className="inline-block w-fit rounded-full bg-white/20 px-2 py-0.5 text-[9.5px] font-extrabold uppercase tracking-wider text-white backdrop-blur">
+          Sponsored
+        </span>
+        <h3 className="mt-1.5 line-clamp-2 text-[16px] font-black leading-tight text-white">
+          {ad.title}
+        </h3>
+        {ad.subtitle && (
+          <p className="mt-1 line-clamp-1 text-[12px] text-white/85">
+            {ad.subtitle}
+          </p>
+        )}
+        <span className="mt-2 inline-flex w-fit items-center gap-1 rounded-full bg-brand-600 px-3.5 py-1.5 text-[11.5px] font-extrabold text-white">
+          Learn more <ArrowRight size={12} />
+        </span>
+      </div>
+    </a>
+  );
+}
+
+function MobileInlineAd({ ad }) {
+  const img = getFullImageUrl(ad.image_url);
+  return (
+    <a
+      href={ad.link_url || "#"}
+      target="_blank"
+      rel="noreferrer"
+      className="group relative block h-[140px] w-full overflow-hidden rounded-2xl bg-ink-900 text-white shadow-md"
+    >
+      <div className="absolute inset-0">
+        {img ? (
+          <img
+            src={img}
+            alt={ad.title}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <div className="h-full w-full bg-gradient-to-br from-navy-600 to-brand-600" />
+        )}
+      </div>
+      <div className="absolute inset-0 bg-gradient-to-t from-black/85 to-transparent" />
+      <span className="absolute left-3 top-3 rounded-full bg-black/60 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-white backdrop-blur">
+        Sponsored
+      </span>
+      <div className="relative z-10 flex h-full flex-col justify-end p-4">
+        <h3 className="line-clamp-2 text-[14px] font-black leading-tight text-white">
+          {ad.title}
+        </h3>
+        <span className="mt-1 inline-flex items-center gap-1 text-[11px] font-extrabold text-white/95">
+          Learn more <ArrowRight size={11} />
+        </span>
+      </div>
+    </a>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   AdSection — hero (rotating) + 2 mini  (DESKTOP)
    ═══════════════════════════════════════════════════════ */
 function AdSection({ ads }) {
   const heroAds = useMemo(() => ads.slice(0, 3), [ads]);

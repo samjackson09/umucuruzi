@@ -1,5 +1,4 @@
 import axios from "axios";
-import Constants from "expo-constants";
 
 const API_URL =
   import.meta.env.VITE_API_URL ||
@@ -19,7 +18,10 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (r) => r,
   (error) => {
-    if (error?.response?.status === 401) {
+    const status = error?.response?.status;
+    const hadToken = !!localStorage.getItem("token");
+
+    if (status === 401 && hadToken) {
       localStorage.removeItem("token");
       localStorage.removeItem("user");
       if (!window.location.pathname.startsWith("/auth")) {
